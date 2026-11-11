@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agora AI Noise Suppression Demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>AI Noise Suppression <span class="muted">Web demo</span></h1>
+  <p class="muted small">
+    Agora Web SDK <code id="sdk-ver">4.24.9</code> · <code>agora-extension-ai-denoiser@2.0.2</code>
+  </p>
+</header>
+
+<main>
+  <div id="banners"></div>
+
+  <section class="callout warn">
+    <strong>🎧 Wear headphones, everyone.</strong>
+    If you use speakers, the other person's voice comes out of your speakers and back into your mic.
+    Echo cancellation won't remove all of it. The denoiser then has to deal with that leftover voice:
+    v2.0.2 tries to remove background voices, so it may cut or warble it. That makes the test unfair.
+    "Hear myself" through speakers also causes feedback howl.
+  </section>
+
+  <section class="card">
+    <h2>1. Join a channel</h2>
+    <form id="join-form" class="grid-form">
+      <label>App ID<input id="appid" required autocomplete="off" placeholder="Agora App ID"></label>
+      <label>Channel<input id="channel" required autocomplete="off" value="ains-demo"></label>
+      <label>Token <span class="muted">(optional)</span><input id="token" autocomplete="off" placeholder="Leave empty for testing-mode App IDs"></label>
+      <label>UID <span class="muted">(optional, numeric)</span><input id="uid" inputmode="numeric" autocomplete="off" placeholder="auto"></label>
+      <label class="span2">Microphone<select id="mic"><option value="">Default microphone</option></select></label>
+
+      <fieldset class="span2">
+        <legend>Browser audio processing <span class="muted">(applied when you join)</span></legend>
+        <label class="check"><input type="checkbox" id="aec" checked> Echo cancellation (AEC)</label>
+        <label class="check"><input type="checkbox" id="ans"> Browser noise suppression (ANS)</label>
+        <label class="check"><input type="checkbox" id="agc" checked> Auto gain (AGC)</label>
+        <p class="hint">Leave browser ANS <b>off</b> when testing. Otherwise the browser's own noise suppression hides what the AI is doing.</p>
+      </fieldset>
+
+      <div class="span2 row">
+        <button type="submit" id="join" class="primary">Join</button>
+        <button type="button" id="leave" disabled>Leave</button>
+        <button type="button" id="invite">Copy invite link</button>
+        <span id="status" class="muted small"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="stage">
+    <article class="card">
+      <h2>2. You (local) <span id="local-uid" class="muted small"></span></h2>
+      <div class="video" id="local-video"><span class="placeholder">Camera off</span></div>
+      <div class="meter" title="Your mic level"><div id="local-meter"></div></div>
+
+      <div class="controls">
+        <label class="switch">
+          <input type="checkbox" id="ains" checked>
+          <span><b>AI noise suppression</b></span>
+        </label>
+        <p class="hint">Off sends your mic with only the browser processing above. Turn it on and off while making noise to compare.</p>
+
+        <label>Mode
+          <select id="mode">
+            <option value="NSNG" selected>NSNG: stationary + non-stationary noise</option>
+            <option value="STATIONARY_NS">STATIONARY_NS: steady noise only</option>
+          </select>
+        </label>
+        <p class="hint"><b>NSNG</b> removes steady hum <i>and</i> sudden noise: keyboard, dogs, traffic, clatter.
+          <b>STATIONARY_NS</b> removes only constant noise (fan, AC, hiss) and uses much less CPU.</p>
+
+        <label>Level (strength)
+          <select id="level">
+            <option value="SOFT" selected>SOFT (recommended)</option>
+            <option value="AGGRESSIVE">AGGRESSIVE</option>
+          </select>
+        </label>
+        <p class="hint"><b>AGGRESSIVE</b> removes more noise but is more likely to damage the voice:
+          clipped word endings, a "watery" sound, soft speech dropped.</p>
+
+        <label>Latency
+          <select id="latency">
+            <option value="FULL" selected>FULL: best quality</option>
+            <option value="LOW">LOW: about 40 ms, slightly weaker</option>
+          </select>
+        </label>
+        <p class="hint">Use <b>LOW</b> when delay matters more than noise removal.</p>
+
+        <label class="check"><input type="checkbox" id="fallback" checked> Switch to STATIONARY_NS automatically if the CPU can't keep up</label>
+
+        <label class="check"><input type="checkbox" id="monitor"> 🎧 Hear myself (processed mic)</label>
+        <p class="hint">Plays your own mic <i>after</i> processing, with a short delay. Headphones only.</p>
+
+        <label class="check"><input type="checkbox" id="cam"> Send camera video</label>
+
+        <div class="row">
+          <button type="button" id="dump" disabled>Dump audio for support</button>
+        </div>
+        <p class="hint">Saves audio files from before and after processing. Send them to Agora support if you report an audio problem.</p>
+      </div>
+    </article>
+
+    <article class="card">
+      <h2>3. Remote users</h2>
+      <p id="remote-empty" class="muted">No one else is here yet. Open the invite link on another device.</p>
+      <div id="remotes" class="remote-grid"></div>
+      <p class="hint">What you hear is the remote person's audio <i>after their own</i> denoiser settings. Your settings change what <i>they</i> hear from you.</p>
+    </article>
+  </section>
+
+  <section class="card prose">
+    <h2>How to test</h2>
+    <ol>
+      <li><b>Two devices</b> (laptop + phone, or two laptops), both on headphones. Use the same App ID and channel. <b>Copy invite link</b> fills both in.</li>
+      <li>On device A, talk while making noise: type hard, crinkle paper, play café or traffic noise from a phone speaker next to the mic.</li>
+      <li>Listen on device B while A switches <b>AI noise suppression</b>, <b>Mode</b> and <b>Level</b>. Changes apply live, with no rejoin.</li>
+      <li><b>Testing alone?</b> Join, put on headphones, tick <b>Hear myself</b> and switch settings while making noise.</li>
+    </ol>
+
+    <h2>Where the denoiser runs</h2>
+    <p>Mic → browser AEC/ANS/AGC → <b>AI denoiser</b> → sent to the channel (and to "Hear myself").
+      The denoiser only works on the sender's mic. Each person controls what the others hear from them.</p>
+
+    <h2>Background voice removal</h2>
+    <p>v2.0.2 adds removal of background human voices (other people talking nearby). The docs list no
+      setting for it: it is part of the v2.0.2 model and stays on while AI noise suppression is on.
+      This is another reason for headphones: the other person's voice leaking from your speakers looks like a background voice.</p>
+
+    <h2>Requirements and notes</h2>
+    <ul>
+      <li>Needs HTTPS (GitHub Pages is fine) or <code>localhost</code>. Desktop Chrome or Edge works best. The page warns you if your browser isn't supported.</li>
+      <li>The model runs in WebAssembly on your CPU. On slow machines the <i>overload</i> warning appears. Try STATIONARY_NS or LOW latency.</li>
+      <li>Tokens are tied to a channel name (and UID). If your project has an App Certificate, generate a temporary token for the exact channel you enter.</li>
+      <li>The invite link contains your App ID and channel, but not the token.</li>
+    </ul>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/agora-rtc-sdk-ng@4.24.9/AgoraRTC_N-production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/agora-extension-ai-denoiser@2.0.2/index.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
